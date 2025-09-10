@@ -12,9 +12,8 @@
  COPY ./pnpm-lock.yaml  ./pnpm-lock.yaml
  COPY ./apps/web  ./apps/web
  
-
 RUN pnpm install
-RUN pnpm run db:generate
+RUN pnpm run generate:db
 RUN DATABASE_URL=${DATABASE_URL} pnpm run build
 
 CMD [ "pnpm","run","start:web" ]
