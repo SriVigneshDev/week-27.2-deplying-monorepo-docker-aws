@@ -1,15 +1,15 @@
-name: Deploy Backend
+name: Deploy Frontend
 on:
   push:
     branches: [ main ]
     paths:
-      - 'apps/backend/**'
+      - 'apps/web/**'
       - 'packages/**'
-      - 'docker/Dockerfile.backend'
+      - 'docker/Dockerfile.frontend'
       - 'pnpm-lock.yaml'
       - 'package.json'
       - 'turbo.json'
-      - '.github/workflows/cd_backend.yml'
+      - '.github/workflows/cd_frontend.yml'
 
 jobs:
   build:
@@ -28,6 +28,8 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./docker/Dockerfile.backend
+          file: ./docker/Dockerfile.frontend
+          build-args: |
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
           push: true
-          tags: srivigneshdev2333/backend-app-week-27:${{ github.sha }}
+          tags: srivigneshdev2333/frontend-app-week-27:${{ github.sha }}
