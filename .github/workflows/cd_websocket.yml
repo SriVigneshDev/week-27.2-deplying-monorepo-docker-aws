@@ -5,7 +5,7 @@ on:
     paths:
       - 'apps/ws/**'
       - 'packages/**'
-      - 'docker/Dockerfile.websocket'
+      - 'docker/Dockerfile.ws'
       - 'pnpm-lock.yaml'
       - 'package.json'
       - 'turbo.json'
@@ -28,6 +28,6 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./docker/Dockerfile.websocket
+          file: ./docker/Dockerfile.ws
           push: true
           tags: srivigneshdev2333/ws-app-week-27:${{ github.sha }}
