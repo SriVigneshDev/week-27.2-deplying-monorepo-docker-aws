@@ -14,7 +14,7 @@
  
 RUN pnpm install
 RUN pnpm run generate:db
-RUN DATABASE_URL=${DATABASE_URL} cd apps/web && pnpm run build
+RUN DATABASE_URL=$DATABASE_URL pnpm dlx turbo build --filter=web...
 
 EXPOSE 3000
 
