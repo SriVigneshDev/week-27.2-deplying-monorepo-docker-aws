@@ -6,6 +6,10 @@ ARG DATABASE_URL
 # 2️⃣ Make it available to all RUN commands (and Prisma during build)
 ENV DATABASE_URL=$DATABASE_URL
 
+
+# Debug step: Print the value inside the container
+RUN echo "DATABASE_URL inside Docker is: $DATABASE_URL"
+
 WORKDIR /usr/src/app
 
 # Install pnpm globally
