@@ -1,30 +1,34 @@
 FROM node:22-alpine
 
+# 1️⃣ Accept DATABASE_URL as a build argument
 ARG DATABASE_URL    
+
+# 2️⃣ Make it available to all RUN commands (and Prisma during build)
+ENV DATABASE_URL=$DATABASE_URL
 
 WORKDIR /usr/src/app
 
 # Install pnpm globally
 RUN npm i -g pnpm 
 
-# 1️⃣ Copy workspace manifest files first (to enable proper workspace install + cache layer)
+# Copy workspace manifest files first (to enable proper workspace install + cache layer)
 COPY ./package.json ./package.json
 COPY ./pnpm-lock.yaml ./pnpm-lock.yaml
 COPY ./pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY ./turbo.json ./turbo.json
 
-# 2️⃣ Copy packages and apps (but not node_modules, thanks to .dockerignore)
+# Copy packages and apps (but not node_modules, thanks to .dockerignore)
 COPY ./packages ./packages
 COPY ./apps/web ./apps/web
 
-# 3️⃣ Install dependencies (now pnpm can link workspaces)
+# Install dependencies
 RUN pnpm install
 
-# 4️⃣ Generate prisma client (db related code)
+# Generate prisma client
 RUN pnpm run generate:db
 
-# 5️⃣ Build only web app (no recursion, because we're using turbo directly)
-RUN DATABASE_URL=$DATABASE_URL pnpm dlx turbo build --filter=web...
+# Build only the web app
+RUN pnpm dlx turbo build --filter=web...
 
 EXPOSE 3000
 
