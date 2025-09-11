@@ -1,37 +1,35 @@
-FROM node:22-alpine
+FROM node:22-alpine AS base
 
-# 1️⃣ Accept DATABASE_URL as a build argument
-ARG DATABASE_URL    
+# Accept and expose DATABASE_URL
+ARG DATABASE_URL
+ENV DATABASE_URL=${DATABASE_URL}
 
-# 2️⃣ Make it available to all RUN commands (and Prisma during build)
-ENV DATABASE_URL=$DATABASE_URL
-
-
-# Debug step: Print the value inside the container
-RUN echo "DATABASE_URL inside Docker is: $DATABASE_URL"
+# Debug: check value (you can remove later)
+RUN echo ">>> DATABASE_URL inside Docker is: $DATABASE_URL"
 
 WORKDIR /usr/src/app
 
-# Install pnpm globally
-RUN npm i -g pnpm 
+# Install pnpm
+RUN npm i -g pnpm
 
-# Copy workspace manifest files first (to enable proper workspace install + cache layer)
-COPY ./package.json ./package.json
-COPY ./pnpm-lock.yaml ./pnpm-lock.yaml
-COPY ./pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY ./turbo.json ./turbo.json
+# Copy manifest files first
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 
-# Copy packages and apps (but not node_modules, thanks to .dockerignore)
-COPY ./packages ./packages
-COPY ./apps/web ./apps/web
+# Copy all apps and packages
+COPY packages ./packages
+COPY apps/web ./apps/web
 
 # Install dependencies
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
-# Generate prisma client
-RUN pnpm run generate:db
+# Force Prisma to use DATABASE_URL and generate client
+RUN DATABASE_URL=$DATABASE_URL pnpm run generate:db
 
-# Build only the web app
+# Bust Turbo cache by injecting DATABASE_URL hash
+ARG DATABASE_HASH
+RUN echo "DATABASE_HASH=${DATABASE_URL}" > .env.docker
+
+# Build app (Turbo now sees .env.docker as part of cache key)
 RUN pnpm dlx turbo build --filter=web...
 
 EXPOSE 3000
