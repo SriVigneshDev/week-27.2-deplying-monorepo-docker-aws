@@ -1,27 +1,45 @@
+# ✅ Use official Node.js 22 image with Alpine (small & secure)
 FROM node:22-alpine
 
+# 1️⃣ Accept DATABASE_URL as a build argument (passed from GitHub Actions)
 ARG DATABASE_URL
+
+# 2️⃣ Make DATABASE_URL available as an environment variable inside container
 ENV DATABASE_URL=$DATABASE_URL
 
+# 3️⃣ Set working directory inside the container
 WORKDIR /usr/src/app
 
+# 4️⃣ Install pnpm globally (used for monorepo installs)
 RUN npm i -g pnpm 
 
-# Copy manifest files first (for cache)
+# 5️⃣ Copy only manifest files first for better Docker layer caching
+# (If package.json/pnpm-lock.yaml don't change, we can reuse cached dependencies)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+
+# 6️⃣ Copy monorepo packages and web app source code
 COPY packages ./packages
 COPY apps/web ./apps/web
 
+# 7️⃣ Install dependencies using pnpm with frozen lockfile
+# (ensures exact versions from pnpm-lock.yaml are installed)
 RUN pnpm install --frozen-lockfile
 
-# Generate Prisma client
+# 8️⃣ Generate Prisma client with correct DATABASE_URL
 RUN DATABASE_URL=$DATABASE_URL pnpm run generate:db
 
-# ✅ Write .env file so Next.js can see DATABASE_URL
+# 9️⃣ Create .env file in apps/web so Next.js can pick up DATABASE_URL during build
 RUN echo "DATABASE_URL=$DATABASE_URL" > apps/web/.env
 
-# Build app
+# 🔑 IMPORTANT: Apply DB schema migrations BEFORE building
+# This ensures tables exist before Next.js tries to run queries at build time
+RUN DATABASE_URL=$DATABASE_URL pnpm dlx prisma migrate deploy
+
+# 🔨 Build only the web app using Turborepo
 RUN pnpm dlx turbo build --filter=web...
 
+# 1️⃣1️⃣ Expose port 3000 (Next.js default port)
 EXPOSE 3000
+
+# 1️⃣2️⃣ Start the production web app
 CMD ["pnpm", "run", "start:web"]
