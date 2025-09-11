@@ -32,7 +32,7 @@ RUN pnpm install
 RUN pnpm run generate:db
 
 # Build only the web app
-RUN DATABASE_URL=$DATABASE_URL pnpm dlx turbo build --filter=web...
+RUN pnpm dlx turbo build --filter=web...
 
 EXPOSE 3000
 
