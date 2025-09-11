@@ -33,7 +33,8 @@ RUN echo "DATABASE_URL=$DATABASE_URL" > apps/web/.env
 
 # 🔑 IMPORTANT: Apply DB schema migrations BEFORE building
 # This ensures tables exist before Next.js tries to run queries at build time
-RUN DATABASE_URL=$DATABASE_URL pnpm dlx prisma migrate deploy
+# ✅ Run DB migrations before building (specify schema path)
+RUN DATABASE_URL=$DATABASE_URL pnpm dlx prisma migrate deploy --schema=packages/db/prisma/schema.prisma
 
 # 🔨 Build only the web app using Turborepo
 RUN pnpm dlx turbo build --filter=web...
