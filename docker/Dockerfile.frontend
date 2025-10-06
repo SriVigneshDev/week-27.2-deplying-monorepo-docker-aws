@@ -19,7 +19,7 @@ COPY  ./apps/web ./apps/web/
 
 COPY  ./packages ./packages/
 
-RUN DATABASE_URL=$DATABASE_URL pnpm run generate:db
+RUN pnpm run generate:db
 
 RUN pnpm dlx turbo build --filter=web...
 
@@ -34,29 +34,29 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 RUN npm i -g pnpm
 
-COPY --from=builder --chown=nodejs:nextjs  /usr/src/app/apps/web/.next ./apps/web/.next
-COPY --from=builder --chown=nodejs:nextjs  /usr/src/app/apps/web/public ./apps/web/public
-COPY --from=builder --chown=nodejs:nextjs  /usr/src/app/apps/web/package.json ./apps/web/package.json
+COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/apps/web/.next ./apps/web/.next
+COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/apps/web/public ./apps/web/public
+COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/apps/web/package.json ./apps/web/package.json
 
-COPY --from=builder --chown=nodejs:nextjs  /usr/src/app/package.json ./package.json
-COPY --from=builder --chown=nodejs:nextjs  /usr/src/app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder --chown=nodejs:nextjs  /usr/src/app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 
 COPY --from=builder --chown=nextjs:nodejs /usr/src/app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /usr/src/app/packages ./packages
 
-# 2️⃣0️⃣ Copy Prisma client and schema (needed for runtime)
+# Copy Prisma client and schema (needed for runtime)
 COPY --from=builder --chown=nextjs:nodejs /usr/src/app/packages/db/prisma ./packages/db/prisma
+
 ARG DATABASE_URL
 ENV DATABASE_URL=$DATABASE_URL
 ENV NODE_ENV=production
 
-# 2️⃣2️⃣ Switch to non-root user
+# Switch to non-root user
 USER nextjs
 
-# 2️⃣3️⃣ Expose port 3000 (Next.js default port)
+# Expose port 3000 (Next.js default port)
 EXPOSE 3000
 
-
-# 2️⃣5️⃣ Start the production web app
+# Start the production web app
 CMD ["pnpm", "run", "start:web"]
