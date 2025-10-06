@@ -20,6 +20,7 @@ COPY --chown=nextjs:nodejs package.json pnpm-lock.yaml pnpm-workspace.yaml turbo
 COPY --chown=nextjs:nodejs apps/web/package.json ./apps/web/package.json
 COPY --chown=nextjs:nodejs packages/*/package.json ./packages/
 
+
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store,uid=1001,gid=1001 \
     pnpm install --frozen-lockfile --prefer-offline
 
@@ -53,9 +54,11 @@ COPY --from=dependencies --chown=nextjs:nodejs /app/turbo.json ./turbo.json
 COPY --chown=nextjs:nodejs packages ./packages
 COPY --chown=nextjs:nodejs apps ./apps
 
-# Now DATABASE_URL is available for both Prisma and Next.js build
-RUN pnpm run generate:db && \
-    pnpm dlx turbo build --filter=web...
+# Generate Prisma Client (using already-installed prisma)
+RUN cd packages/db && pnpm prisma generate
+
+# Build with Turbo
+RUN pnpm dlx turbo build --filter=web...
 
 # ==============================================================================
 # PRODUCTION - ALSO NEEDS DATABASE_URL AT RUNTIME
