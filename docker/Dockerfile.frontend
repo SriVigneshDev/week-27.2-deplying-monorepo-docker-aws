@@ -15,8 +15,10 @@ WORKDIR /app
 FROM base AS dependencies
 
 COPY --chown=nextjs:nodejs package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+
+# Copy package.json from all workspace packages (preserve directory structure)
+COPY --chown=nextjs:nodejs apps/web/package.json ./apps/web/package.json
 COPY --chown=nextjs:nodejs packages/*/package.json ./packages/
-COPY --chown=nextjs:nodejs apps/web/package.json ./apps/web/
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store,uid=1001,gid=1001 \
     pnpm install --frozen-lockfile --prefer-offline
@@ -43,10 +45,13 @@ RUN if [ -z "$DATABASE_URL" ]; then \
 
 COPY --from=dependencies --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=dependencies --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=dependencies --chown=nextjs:nodejs /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=dependencies --chown=nextjs:nodejs /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=dependencies --chown=nextjs:nodejs /app/turbo.json ./turbo.json
 
+# Copy source code - MUST include ALL workspace packages for Turbo
 COPY --chown=nextjs:nodejs packages ./packages
-COPY --chown=nextjs:nodejs apps/web ./apps/web
-COPY --chown=nextjs:nodejs turbo.json ./turbo.json
+COPY --chown=nextjs:nodejs apps ./apps
 
 # Now DATABASE_URL is available for both Prisma and Next.js build
 RUN pnpm run generate:db && \
