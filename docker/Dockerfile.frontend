@@ -55,8 +55,7 @@ COPY --chown=nextjs:nodejs packages ./packages
 COPY --chown=nextjs:nodejs apps ./apps
 
 # Generate Prisma Client (using already-installed prisma)
-RUN cd packages/db && pnpm prisma generate
-
+RUN pnpm run generate:db
 # Build with Turbo
 RUN pnpm dlx turbo build --filter=web...
 
