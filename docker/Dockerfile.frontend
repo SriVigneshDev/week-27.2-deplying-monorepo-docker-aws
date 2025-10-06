@@ -1,62 +1,93 @@
+# 🏗️ Build Stage - Contains all build tools and dependencies
 FROM node:22-alpine AS builder
 
+# 1️⃣ Accept DATABASE_URL as a build argument (passed from GitHub Actions)
 ARG DATABASE_URL
+
+# 2️⃣ Make DATABASE_URL available as an environment variable inside container
 ENV DATABASE_URL=$DATABASE_URL
 
+# 3️⃣ Set working directory inside the container
 WORKDIR /usr/src/app
 
-RUN npm i -g pnpm 
-
-COPY ./package.json ./pnpm-lock.yaml ./pnpm-workspace.yaml ./turbo.json ./
-
-COPY  ./packages/*/package.json  ./packages/
-
-COPY ./apps/web/package.json ./apps/web/package.json
-
-RUN  pnpm i --frozen-lockfile
-
-COPY  ./apps/web ./apps/web/
-
-COPY  ./packages ./packages/
-
-RUN pnpm run generate:db
-
-RUN pnpm dlx turbo build --filter=web...
-
-RUN pnpm prune --prod
-
-FROM node:22-alpine AS production
-
-WORKDIR /usr/src/app
-
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser  --system --uid 1001 nextjs
-
+# 4️⃣ Install pnpm globally (used for monorepo installs)
 RUN npm i -g pnpm
 
-COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/apps/web/.next ./apps/web/.next
-COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/apps/web/public ./apps/web/public
-COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/apps/web/package.json ./apps/web/package.json
+# 5️⃣ Copy only package management files first for optimal layer caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 
-COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/package.json ./package.json
-COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder --chown=nextjs:nodejs  /usr/src/app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+# 6️⃣ Copy only package.json files to create workspace structure
+# (pnpm needs workspace structure but NOT source code for installation)
+COPY packages/*/package.json ./packages/
+COPY apps/web/package.json ./apps/web/
 
+# 7️⃣ Install all dependencies (including devDependencies for build)
+# (This layer will be cached unless dependencies change!)
+RUN pnpm install --frozen-lockfile
+
+# 8️⃣ Copy actual source code AFTER dependency installation
+# (Changing source code won't invalidate dependency cache)
+COPY packages ./packages
+COPY apps/web ./apps/web
+
+# 9️⃣ Generate Prisma client with correct DATABASE_URL
+RUN  pnpm run generate:db
+
+# 🔟 Create .env file in apps/web so Next.js can pick up DATABASE_URL during build
+RUN echo "DATABASE_URL=$DATABASE_URL" > apps/web/.env
+
+
+# 1️⃣2️⃣ Build only the web app using Turborepo
+RUN pnpm dlx turbo build --filter=web...
+
+# 1️⃣3️⃣ Clean up dev dependencies to reduce what gets copied to production stage
+RUN pnpm prune --prod
+
+# 🚀 Production Stage - Minimal runtime image
+FROM node:22-alpine AS production
+
+# 1️⃣4️⃣ Install runtime dependencies
+RUN npm i -g pnpm && apk add --no-cache curl
+
+# 1️⃣5️⃣ Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# 1️⃣6️⃣ Set working directory
+WORKDIR /usr/src/app
+
+# 1️⃣7️⃣ Copy built Next.js application from builder stage
+COPY --from=builder --chown=nextjs:nodejs /usr/src/app/apps/web/.next ./apps/web/.next
+COPY --from=builder --chown=nextjs:nodejs /usr/src/app/apps/web/public ./apps/web/public
+COPY --from=builder --chown=nextjs:nodejs /usr/src/app/apps/web/package.json ./apps/web/package.json
+COPY --from=builder --chown=nextjs:nodejs /usr/src/app/apps/web/.env ./apps/web/.env
+
+# 1️⃣8️⃣ Copy necessary files for runtime
+COPY --from=builder --chown=nextjs:nodejs /usr/src/app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /usr/src/app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder --chown=nextjs:nodejs /usr/src/app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+
+# 1️⃣9️⃣ Copy production node_modules and packages
 COPY --from=builder --chown=nextjs:nodejs /usr/src/app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /usr/src/app/packages ./packages
 
-# Copy Prisma client and schema (needed for runtime)
+# 2️⃣0️⃣ Copy Prisma client and schema (needed for runtime)
 COPY --from=builder --chown=nextjs:nodejs /usr/src/app/packages/db/prisma ./packages/db/prisma
 
+# 2️⃣1️⃣ Set runtime environment variables
 ARG DATABASE_URL
 ENV DATABASE_URL=$DATABASE_URL
 ENV NODE_ENV=production
 
-# Switch to non-root user
+# 2️⃣2️⃣ Switch to non-root user
 USER nextjs
 
-# Expose port 3000 (Next.js default port)
+# 2️⃣3️⃣ Expose port 3000 (Next.js default port)
 EXPOSE 3000
 
-# Start the production web app
+# 2️⃣4️⃣ Add health check for Next.js app
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || curl -f http://localhost:3000/health || exit 1
+
+# 2️⃣5️⃣ Start the production web app
 CMD ["pnpm", "run", "start:web"]
