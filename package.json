@@ -11,7 +11,7 @@
      "start:backend": "cd apps/backend && tsc-b && node ./dist/index.js",
     "start:ws": "cd apps/ws && tsc-b && node ./dist/index.js",
     "start:web": "cd apps/web && pnpm  run start",
-"generate:db": "cd packages/db && pnpm prisma generate"
+    "generate:db": "cd packages/db && npx prisma generate"
   },
   "devDependencies": {
     "prettier": "^3.6.2",
