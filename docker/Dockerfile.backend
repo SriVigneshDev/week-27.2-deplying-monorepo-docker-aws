@@ -17,9 +17,8 @@ COPY apps/backend ./apps/backend
 RUN pnpm run generate:db
 RUN pnpm dlx turbo build --filter=backend...
 
-# Bundle into single file
-RUN pnpm add -D esbuild
-RUN npx esbuild apps/backend/dist/index.js \
+# Bundle into single file using npx (auto-installs esbuild)
+RUN npx esbuild@latest apps/backend/dist/index.js \
     --bundle \
     --platform=node \
     --target=node22 \
@@ -27,27 +26,22 @@ RUN npx esbuild apps/backend/dist/index.js \
     --minify \
     --external:@prisma/client
 
-# 🚀 Production Stage - Alpine (can debug with shell)
-FROM node:22-alpine AS production
+# 🚀 Production Stage - Ultra Minimal
+FROM gcr.io/distroless/nodejs22-debian12:nonroot
 
 ENV NODE_ENV=production \
     PORT=8080
 
-RUN addgroup -g 1001 nodejs && \
-    adduser -u 1001 -G nodejs -s /bin/sh -D backend
-
 WORKDIR /app
 
-# Copy bundled app
-COPY --from=builder --chown=backend:nodejs /app/apps/backend/standalone.js ./
+# Copy bundled single file (all code + dependencies in one file!)
+COPY --from=builder --chown=nonroot:nonroot /app/apps/backend/standalone.js ./
 
-# Copy Prisma
-COPY --from=builder --chown=backend:nodejs /app/node_modules/.pnpm ./node_modules/.pnpm
-COPY --from=builder --chown=backend:nodejs /app/node_modules/.modules.yaml ./node_modules/.modules.yaml
-COPY --from=builder --chown=backend:nodejs /app/packages/db/prisma ./packages/db/prisma
-
-USER backend
+# Copy only Prisma (can't be bundled due to native binaries)
+COPY --from=builder --chown=nonroot:nonroot /app/node_modules/.pnpm ./node_modules/.pnpm
+COPY --from=builder --chown=nonroot:nonroot /app/node_modules/.modules.yaml ./node_modules/.modules.yaml
+COPY --from=builder --chown=nonroot:nonroot /app/packages/db/prisma ./packages/db/prisma
 
 EXPOSE 8080
 
-CMD ["node", "standalone.js"]
+CMD ["standalone.js"]
