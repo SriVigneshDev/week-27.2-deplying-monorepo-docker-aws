@@ -20,10 +20,10 @@ COPY apps/web ./apps/web
 RUN pnpm run generate:db
 RUN echo "DATABASE_URL=$DATABASE_URL" > apps/web/.env
 
-# Build with standalone output (CRITICAL for size reduction)
+# Build with standalone output
 RUN pnpm dlx turbo build --filter=web...
 
-# 🚀 Production Stage - Ultra Minimal (<100MB target)
+# 🚀 Production Stage - Ultra Minimal
 FROM gcr.io/distroless/nodejs22-debian12:nonroot AS production
 
 ARG DATABASE_URL
@@ -32,14 +32,13 @@ ENV DATABASE_URL=$DATABASE_URL \
 
 WORKDIR /app
 
-# Copy Next.js standalone output (includes only necessary deps)
+# Copy Next.js standalone output (already includes all dependencies)
 COPY --from=builder --chown=nonroot:nonroot /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nonroot:nonroot /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder --chown=nonroot:nonroot /app/apps/web/public ./apps/web/public
 
-# Copy only Prisma runtime (not entire packages)
-COPY --from=builder --chown=nonroot:nonroot /app/node_modules/.prisma/client ./node_modules/.prisma/client
-COPY --from=builder --chown=nonroot:nonroot /app/node_modules/@prisma/client ./node_modules/@prisma/client
+# Copy Prisma schema (needed for runtime)
+COPY --from=builder --chown=nonroot:nonroot /app/packages/db/prisma/schema.prisma ./packages/db/prisma/schema.prisma
 
 EXPOSE 3000
 
