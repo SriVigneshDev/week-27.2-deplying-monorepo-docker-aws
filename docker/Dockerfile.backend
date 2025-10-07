@@ -1,22 +1,72 @@
-FROM node:22-alpine
+# 1) Layer 1 Run Time 
+FROM node:22-alpine AS builder
 
-RUN npm i -g pnpm 
+# 2)  Layer 2 - Setting the working directory
+WORKDIR /usr/src/app
 
-WORKDIR  /usr/src/app
+# 3) Layer 3 - Installing pnpm glbally
+RUN npm install -g pnpm 
 
-COPY ./packages ./packages
+# 4) layer 4 - Copying the monorepo runtime dependencies
+COPY ./package.json ./pnpm-lock.yaml ./pnpm-workspace.yaml ./turbo.json ./
 
-COPY ./pnpm-lock.yaml ./pnpm-lock.yaml
+# 5) Layer 5 - Copying the packaghes runtime dependencies and http backend runtime dependencies
+COPY ./packages/*/package.json  ./packages/
+COPY ./apps/backend/package.json /apps/backend/
 
-COPY ./package.json  ./package.json
+# 6) Layer 6 - Installing the runtime depend
+RUN pnpm i --frozen-lockfile
 
-COPY ./turbo.json  ./turbo.json
+# 7) Layer 7 - Copying the source code
+COPY packages ./packages
+COPY apps/backend ./apps/backend
 
-RUN pnpm install
-
-
+# 8) Layer 8 - Generating the client 
 RUN pnpm run generate:db
 
+# 9) Layer 9 - Building the runtime code 
+RUN pnpm dlx turbo build --filter=backend...
+
+# 10) Layer 10 - clearing the unnecasary dependencies required for build time
+RUN pnpm prune --prod
+
+# 11) Layer 11- Production Image only build time dependencies(Builder stage)
+FROM node:22-alpine AS production
+
+
+# 12) Layer 12 - installing pnpm as it is used for running backned start script
+RUN npm i -g pnpm
+
+# 13) Layer 13 - Creating anon group user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 backend
+
+# 14) Layer 14 - Setting the work directory
+WORKDIR /usr/src/app
+
+#15) Layer 15 - Copying the compled backend application 
+COPY --from=builder --chown=backend:nodejs  /usr/src/app/apps/backend/dist  ./apps/backend/dist
+COPY --from=builder --chown=backend:nodejs  /usr/src/app/apps/backend/package.json  ./apps/backend/package.json
+
+
+#16) Layer 16- Copying the runtime dependencies
+COPY --from=builder --chown=backend:nodejs  /usr/src/app/package.json ./package.json
+COPY --from=builder --chown=backend:nodejs  /usr/src/app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder --chown=backend:nodejs  /usr/src/app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+
+# 17) Layer 17 - Copying the optimal node_modules
+COPY --from=builder --chown=backend:nodejs  /usr/src/app/node_modules ./node_modules
+COPY --from=builder --chown=backend:nodejs  /usr/src/app/packages ./packages
+
+# 18) Layer 18 - Setting the Node Environamnrt 
+ENV NODE_ENV=production
+ENV PORT=8080
+
+# 19) Layer 19 - Chaning from rrot user
+USER backend
+
+# 20) Layer 20 - Exposing hte port
 EXPOSE 8080
 
-CMD ["pnpm", "run","start:backend"]
+# 21) Ruuning the production application
+CMD [ "pnpm","run","start:backend" ]
