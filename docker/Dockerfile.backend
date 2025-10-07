@@ -17,14 +17,13 @@ COPY apps/backend ./apps/backend
 RUN pnpm run generate:db
 RUN pnpm dlx turbo build --filter=backend...
 
-# Bundle into single file using npx (auto-installs esbuild)
+# Bundle into single file (include Prisma this time!)
 RUN npx esbuild@latest apps/backend/dist/index.js \
     --bundle \
     --platform=node \
     --target=node22 \
     --outfile=apps/backend/standalone.js \
-    --minify \
-    --external:@prisma/client
+    --minify
 
 # 🚀 Production Stage - Ultra Minimal
 FROM gcr.io/distroless/nodejs22-debian12:nonroot
@@ -37,10 +36,7 @@ WORKDIR /app
 # Copy bundled single file (all code + dependencies in one file!)
 COPY --from=builder --chown=nonroot:nonroot /app/apps/backend/standalone.js ./
 
-# Copy only Prisma (can't be bundled due to native binaries)
-COPY --from=builder --chown=nonroot:nonroot /app/node_modules/.pnpm ./node_modules/.pnpm
-COPY --from=builder --chown=nonroot:nonroot /app/node_modules/.modules.yaml ./node_modules/.modules.yaml
-COPY --from=builder --chown=nonroot:nonroot /app/packages/db/prisma ./packages/db/prisma
+# No need to copy anything else - everything is in standalone.js!
 
 EXPOSE 8080
 
