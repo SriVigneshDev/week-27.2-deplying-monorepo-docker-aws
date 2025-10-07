@@ -1,24 +1,43 @@
- FROM node:22-alpine
+# 🏗️ Build Stage
+FROM node:22-alpine AS builder
 
-RUN npm i -g pnpm 
+WORKDIR /app
 
-WORKDIR  /usr/src/app
+RUN npm i -g pnpm
 
-COPY ./packages ./packages
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY packages/*/package.json ./packages/
+COPY apps/ws/package.json ./apps/ws/
 
-COPY ./pnpm-lock.yaml ./pnpm-lock.yaml
+RUN pnpm install --frozen-lockfile
 
-COPY ./package.json  ./package.json
-
-COPY ./turbo.json  ./turbo.json
-
-COPY ./apps/ws  ./apps/ws 
-
-RUN pnpm install
-
+COPY packages ./packages
+COPY apps/ws ./apps/ws
 
 RUN pnpm run generate:db
+RUN pnpm dlx turbo build --filter=ws...
 
-EXPOSE 8081
+# Bundle into single file (include Prisma this time!)
+RUN npx esbuild@latest apps/ws/dist/index.js \
+    --bundle \
+    --platform=node \
+    --target=node22 \
+    --outfile=apps/ws/standalone.js \
+    --minify
 
-CMD ["pnpm", "run","start:ws"]
+# 🚀 Production Stage - Ultra Minimal
+FROM gcr.io/distroless/nodejs22-debian12:nonroot
+
+ENV NODE_ENV=production \
+    PORT=8080
+
+WORKDIR /app
+
+# Copy bundled single file (all code + dependencies in one file!)
+COPY --from=builder --chown=nonroot:nonroot /app/apps/ws/standalone.js ./
+
+# No need to copy anything else - everything is in standalone.js!
+
+EXPOSE 8080
+
+CMD ["standalone.js"]
