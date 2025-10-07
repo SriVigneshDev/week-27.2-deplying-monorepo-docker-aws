@@ -1,72 +1,53 @@
-# 1) Layer 1 Run Time 
+# 🏗️ Build Stage
 FROM node:22-alpine AS builder
 
-# 2)  Layer 2 - Setting the working directory
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# 3) Layer 3 - Installing pnpm glbally
-RUN npm install -g pnpm 
+RUN npm i -g pnpm
 
-# 4) layer 4 - Copying the monorepo runtime dependencies
-COPY ./package.json ./pnpm-lock.yaml ./pnpm-workspace.yaml ./turbo.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY packages/*/package.json ./packages/
+COPY apps/backend/package.json ./apps/backend/
 
-# 5) Layer 5 - Copying the packaghes runtime dependencies and http backend runtime dependencies
-COPY ./packages/*/package.json  ./packages/
-COPY ./apps/backend/package.json /apps/backend/
+RUN pnpm install --frozen-lockfile
 
-# 6) Layer 6 - Installing the runtime depend
-RUN pnpm i --frozen-lockfile
-
-# 7) Layer 7 - Copying the source code
 COPY packages ./packages
 COPY apps/backend ./apps/backend
 
-# 8) Layer 8 - Generating the client 
 RUN pnpm run generate:db
-
-# 9) Layer 9 - Building the runtime code 
 RUN pnpm dlx turbo build --filter=backend...
 
-# 10) Layer 10 - clearing the unnecasary dependencies required for build time
-RUN pnpm prune --prod
+# Bundle into single file
+RUN pnpm add -D esbuild
+RUN npx esbuild apps/backend/dist/index.js \
+    --bundle \
+    --platform=node \
+    --target=node22 \
+    --outfile=apps/backend/standalone.js \
+    --minify \
+    --external:@prisma/client
 
-# 11) Layer 11- Production Image only build time dependencies(Builder stage)
+# 🚀 Production Stage - Alpine (can debug with shell)
 FROM node:22-alpine AS production
 
+ENV NODE_ENV=production \
+    PORT=8080
 
-# 12) Layer 12 - installing pnpm as it is used for running backned start script
-RUN npm i -g pnpm
+RUN addgroup -g 1001 nodejs && \
+    adduser -u 1001 -G nodejs -s /bin/sh -D backend
 
-# 13) Layer 13 - Creating anon group user for security
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 backend
+WORKDIR /app
 
-# 14) Layer 14 - Setting the work directory
-WORKDIR /usr/src/app
+# Copy bundled app
+COPY --from=builder --chown=backend:nodejs /app/apps/backend/standalone.js ./
 
-#15) Layer 15 - Copying the compled backend application 
-COPY --from=builder --chown=backend:nodejs  /usr/src/app/apps/backend/dist  ./apps/backend/dist
-COPY --from=builder --chown=backend:nodejs  /usr/src/app/apps/backend/package.json  ./apps/backend/package.json
+# Copy Prisma
+COPY --from=builder --chown=backend:nodejs /app/node_modules/.pnpm ./node_modules/.pnpm
+COPY --from=builder --chown=backend:nodejs /app/node_modules/.modules.yaml ./node_modules/.modules.yaml
+COPY --from=builder --chown=backend:nodejs /app/packages/db/prisma ./packages/db/prisma
 
-
-#16) Layer 16- Copying the runtime dependencies
-COPY --from=builder --chown=backend:nodejs  /usr/src/app/package.json ./package.json
-COPY --from=builder --chown=backend:nodejs  /usr/src/app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder --chown=backend:nodejs  /usr/src/app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-
-# 17) Layer 17 - Copying the optimal node_modules
-COPY --from=builder --chown=backend:nodejs  /usr/src/app/node_modules ./node_modules
-COPY --from=builder --chown=backend:nodejs  /usr/src/app/packages ./packages
-
-# 18) Layer 18 - Setting the Node Environamnrt 
-ENV NODE_ENV=production
-ENV PORT=8080
-
-# 19) Layer 19 - Chaning from rrot user
 USER backend
 
-# 20) Layer 20 - Exposing hte port
 EXPOSE 8080
 
-# 21) Ruuning the production application
-CMD [ "pnpm","run","start:backend" ]
+CMD ["node", "standalone.js"]
