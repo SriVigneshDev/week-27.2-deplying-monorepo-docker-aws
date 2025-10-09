@@ -38,6 +38,10 @@ importers:
       prisma:
         specifier: ^6.15.0
         version: 6.15.0(typescript@5.9.2)
+    devDependencies:
+      esbuild:
+        specifier: ^0.25.10
+        version: 0.25.10
 
   apps/web:
     dependencies:
