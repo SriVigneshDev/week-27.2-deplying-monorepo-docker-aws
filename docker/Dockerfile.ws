@@ -7,34 +7,26 @@ WORKDIR /app
 
 RUN npm i -g pnpm@latest
 
+# Copy package files for better layer caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY packages/*/package.json ./packages/
 COPY apps/ws/package.json ./apps/ws/
 
+# Install dependencies with cache mount
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 
+# Copy source code
 COPY packages ./packages
 COPY apps/ws ./apps/ws
 
+# Generate database client
 RUN pnpm run generate:db
 
+# Build and bundle (now includes esbuild via build:prod script!)
 RUN --mount=type=cache,target=.turbo \
-    pnpm dlx turbo build --filter=ws...
-
-# Bundle with esbuild (remove UPX - it doesn't work on JS files)
-RUN npx esbuild@latest apps/ws/dist/index.js \
-    --bundle \
-    --platform=node \
-    --target=node22 \
-    --outfile=apps/ws/standalone.js \
-    --minify \
-    --tree-shaking=true \
-    --drop:console \
-    --drop:debugger \
-    --keep-names=false \
-    --legal-comments=none \
-    --define:process.env.NODE_ENV=\"production\"
+    pnpm --filter=ws run build:prod
+    # This runs: tsc -b && node esbuild.config.mjs
 
 # 🚀 Production Stage - Alpine Minimal (~15-20MB total)
 FROM alpine:3.20
@@ -46,7 +38,7 @@ RUN apk add --no-cache nodejs && \
 
 WORKDIR /app
 
-# Copy bundled file
+# Copy ONLY the bundled file (this is why it's still 15-20MB!)
 COPY --from=builder --chown=nodejs:nodejs /app/apps/ws/standalone.js ./
 
 ENV NODE_ENV=production \

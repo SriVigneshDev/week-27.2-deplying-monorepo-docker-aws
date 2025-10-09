@@ -8,9 +8,11 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-     "start:backend": "cd apps/backend && tsc-b && node ./dist/index.js",
-    "start:ws": "cd apps/ws && tsc-b && node ./dist/index.js",
-    "start:web": "cd apps/web && pnpm  run start",
+    "start:backend": "cd apps/backend && node ./standalone.js",
+    "start:backend:dev": "cd apps/backend && tsc -b && node ./dist/index.js",
+    "start:ws": "cd apps/ws && node ./standalone.js",
+    "start:ws:dev": "cd apps/ws && tsc -b && node ./dist/index.js",
+    "start:web": "cd apps/web && pnpm run start",
     "generate:db": "cd packages/db && npx prisma generate"
   },
   "devDependencies": {
