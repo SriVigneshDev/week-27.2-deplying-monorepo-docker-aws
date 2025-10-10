@@ -1,45 +1,69 @@
 # 🏗️ Build Stage
 FROM node:22-alpine AS builder
 
-ARG DATABASE_URL
-ENV DATABASE_URL=$DATABASE_URL
+# Install dependencies needed for pnpm and potentially Prisma
+RUN apk update && apk upgrade && apk add --no-cache libc6-compat openssl && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
-RUN npm i -g pnpm
+# Install pnpm globally
+RUN npm i -g pnpm@latest
 
+# Copy package files for better layer caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+# Important: Copy workspace package definitions to their respective folders
 COPY packages/*/package.json ./packages/
 COPY apps/web/package.json ./apps/web/
 
-RUN pnpm install --frozen-lockfile
+# Install dependencies with cache mount for speed
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
+# Copy all source code
 COPY packages ./packages
 COPY apps/web ./apps/web
 
-RUN pnpm run generate:db
-RUN echo "DATABASE_URL=$DATABASE_URL" > apps/web/.env
+# Generate Prisma client based on the schema
+# This must be done before the build
+RUN pnpm --filter=db run generate
 
-# Build with standalone output
-RUN pnpm dlx turbo build --filter=web...
+# Build the Next.js application using Turborepo
+# This leverages the `output: 'standalone'` in your next.config.js
+# The --mount cache will speed up subsequent builds
+RUN --mount=type=cache,target=.turbo \
+    pnpm --filter=web... run build
 
-# 🚀 Production Stage - Ultra Minimal
-FROM gcr.io/distroless/nodejs22-debian12:nonroot AS production
+# 🚀 Production Stage - Alpine Minimal
+FROM alpine:3.20
 
-ARG DATABASE_URL
-ENV DATABASE_URL=$DATABASE_URL \
-    NODE_ENV=production
+# Install only Node.js runtime and necessary libs for Prisma
+RUN apk add --no-cache nodejs libc6-compat openssl
+
+# Create a non-root user and group for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
 
 WORKDIR /app
 
-# Copy Next.js standalone output (already includes all dependencies)
-COPY --from=builder --chown=nonroot:nonroot /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nonroot:nonroot /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder --chown=nonroot:nonroot /app/apps/web/public ./apps/web/public
+# Set user early to ensure correct ownership
+USER nodejs
 
-# Copy Prisma schema (needed for runtime)
-COPY --from=builder --chown=nonroot:nonroot /app/packages/db/prisma/schema.prisma ./packages/db/prisma/schema.prisma
+# Copy the standalone server output
+COPY --from=builder --chown=nodejs:nodejs /app/apps/web/.next/standalone ./
+
+# Copy static assets and public files to their correct locations within the server
+COPY --from=builder --chown=nodejs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=nodejs:nodejs /app/apps/web/public ./apps/web/public
+
+# Prisma schema is required at runtime by the Prisma Client
+COPY --from=builder --chown=nodejs:nodejs /app/packages/db/prisma/schema.prisma ./packages/db/prisma/schema.prisma
+
+ENV NODE_ENV=production \
+    PORT=3000 \
+    # Set a reasonable memory limit for the Node.js process
+    NODE_OPTIONS="--max-old-space-size=512"
 
 EXPOSE 3000
 
-CMD ["apps/web/server.js"]
+# The command to start the standalone Next.js server
+CMD ["node", "apps/web/server.js"]
