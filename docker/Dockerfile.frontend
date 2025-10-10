@@ -1,6 +1,12 @@
 # 🏗️ Build Stage
 FROM node:22-alpine AS builder
 
+# --- FIX: DECLARE THE BUILD ARGUMENT AND SET IT AS AN ENV VAR ---
+# This makes the DATABASE_URL available to the `RUN` commands below
+ARG DATABASE_URL
+ENV DATABASE_URL=$DATABASE_URL
+# -----------------------------------------------------------------
+
 # Install dependencies needed for pnpm and potentially Prisma
 RUN apk update && apk upgrade && apk add --no-cache libc6-compat openssl && rm -rf /var/cache/apk/*
 
@@ -25,11 +31,10 @@ COPY apps/web ./apps/web
 
 # Generate Prisma client based on the schema
 # This must be done before the build
-RUN pnpm  run generate:db
+RUN pnpm run generate:db
 
 # Build the Next.js application using Turborepo
-# This leverages the `output: 'standalone'` in your next.config.js
-# The --mount cache will speed up subsequent builds
+# DATABASE_URL is now available here, so SSG pages can be built
 RUN --mount=type=cache,target=.turbo \
     pnpm --filter=web... run build
 
@@ -58,10 +63,14 @@ COPY --from=builder --chown=nodejs:nodejs /app/apps/web/public ./apps/web/public
 # Prisma schema is required at runtime by the Prisma Client
 COPY --from=builder --chown=nodejs:nodejs /app/packages/db/prisma/schema.prisma ./packages/db/prisma/schema.prisma
 
-ENV NODE_ENV=production \
+# --- FIX: PASS THE BUILD ARG TO THE FINAL STAGE FOR RUNTIME ---
+ARG DATABASE_URL
+ENV DATABASE_URL=$DATABASE_URL \
+    NODE_ENV=production \
     PORT=3000 \
     # Set a reasonable memory limit for the Node.js process
     NODE_OPTIONS="--max-old-space-size=512"
+# ---------------------------------------------------------------
 
 EXPOSE 3000
 
