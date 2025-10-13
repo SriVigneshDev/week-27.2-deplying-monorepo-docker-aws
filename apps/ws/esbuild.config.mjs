@@ -23,8 +23,10 @@ await esbuild.build({
 
 console.log('✅ Bundle complete');
 
-// Copy Prisma binaries only
-const pnpmPrismaPath = join(__dirname, 'node_modules', '.pnpm');
+// Copy Prisma binaries
+// In pnpm monorepo, the .pnpm store is at workspace root (../../node_modules/.pnpm)
+const workspaceRoot = join(__dirname, '..', '..');
+const pnpmPrismaPath = join(workspaceRoot, 'node_modules', '.pnpm');
 let prismaEnginePath = null;
 
 // Find the actual Prisma client path in pnpm store
@@ -33,7 +35,21 @@ if (existsSync(pnpmPrismaPath)) {
   const prismaDir = pnpmDirs.find(d => d.startsWith('@prisma+client'));
   
   if (prismaDir) {
-    prismaEnginePath = join(pnpmPrismaPath, prismaDir, 'node_modules', '.prisma', 'client');
+    // The actual .prisma/client folder is inside the @prisma/client package
+    const possiblePath = join(pnpmPrismaPath, prismaDir, 'node_modules', '.prisma', 'client');
+    if (existsSync(possiblePath)) {
+      prismaEnginePath = possiblePath;
+      console.log(`📦 Found Prisma binaries at: ${possiblePath}`);
+    }
+  }
+}
+
+// Alternative: Check if Prisma client exists in the resolved location
+if (!prismaEnginePath) {
+  const alternativePath = join(workspaceRoot, 'node_modules', '.prisma', 'client');
+  if (existsSync(alternativePath)) {
+    prismaEnginePath = alternativePath;
+    console.log(`📦 Found Prisma binaries at alternative path: ${alternativePath}`);
   }
 }
 
@@ -41,16 +57,24 @@ if (prismaEnginePath && existsSync(prismaEnginePath)) {
   const outputPath = join(__dirname, '.prisma', 'client');
   mkdirSync(outputPath, { recursive: true });
   
-  readdirSync(prismaEnginePath).forEach(file => {
+  // Copy all files from Prisma client directory
+  const files = readdirSync(prismaEnginePath);
+  console.log(`📋 Copying ${files.length} Prisma files...`);
+  
+  files.forEach(file => {
     const src = join(prismaEnginePath, file);
     const dest = join(outputPath, file);
     if (statSync(src).isFile()) {
       copyFileSync(src, dest);
+      console.log(`  ✓ Copied: ${file}`);
     }
   });
   
-  console.log('✅ Prisma binaries copied');
+  console.log('✅ Prisma binaries copied successfully');
 } else {
   console.error('❌ Prisma binaries not found');
+  console.error('Searched paths:');
+  console.error(`  - pnpm store: ${pnpmPrismaPath}`);
+  console.error(`  - alternative: ${join(workspaceRoot, 'node_modules', '.prisma', 'client')}`);
   process.exit(1);
 }

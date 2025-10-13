@@ -38,15 +38,14 @@ RUN apk add --no-cache nodejs openssl && \
 
 WORKDIR /app
 
-# Copy ONLY the bundled file (this is why it's still 15-20MB!)
+# Copy ONLY the bundled file and Prisma binaries
 COPY --from=builder --chown=nodejs:nodejs /app/apps/ws/standalone.js ./
-COPY --from=builder /app/apps/backend/.prisma/client ./.prisma/client
+# Fix: Copy from ws app, not backend app
+COPY --from=builder --chown=nodejs:nodejs /app/apps/ws/.prisma/client ./.prisma/client
 
 ENV NODE_ENV=production \
-    PORT=8080 \
+    PORT=8081 \
     NODE_OPTIONS="--max-old-space-size=256"
-
-
 
 USER nodejs
 
