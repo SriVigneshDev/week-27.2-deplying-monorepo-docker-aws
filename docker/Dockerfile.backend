@@ -40,12 +40,14 @@ WORKDIR /app
 
 # Copy ONLY the bundled file (this is why it's still 15-20MB!)
 COPY --from=builder --chown=nodejs:nodejs /app/apps/backend/standalone.js ./
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma ./node_modules/.prisma
+
+# Copy the Prisma query engine binary directly
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node ./
 
 ENV NODE_ENV=production \
     PORT=8080 \
-    NODE_OPTIONS="--max-old-space-size=256"
-
+    NODE_OPTIONS="--max-old-space-size=256" \
+    PRISMA_QUERY_ENGINE_LIBRARY="/app/libquery_engine-linux-musl-openssl-3.0.x.so.node"
 
 USER nodejs
 
