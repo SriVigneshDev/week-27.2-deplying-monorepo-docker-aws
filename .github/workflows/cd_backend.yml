@@ -43,4 +43,4 @@ jobs:
             docker pull srivigneshdev2333/backend-app-week-27:${{ github.sha }}
             docker stop backend || true
             docker rm backend || true
-            docker run -d --name backend -p 8080:8080 --restart always srivigneshdev2333/backend-app-week-27:${{ github.sha }}
+            docker run -d --name backend -p 8080:8080  srivigneshdev2333/backend-app-week-27:${{ github.sha }}
