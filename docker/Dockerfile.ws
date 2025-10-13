@@ -45,12 +45,9 @@ ENV NODE_ENV=production \
     PORT=8080 \
     NODE_OPTIONS="--max-old-space-size=256"
 
-# Health check for WebSocket
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "const net = require('net'); const socket = net.connect(8080, 'localhost'); socket.on('connect', () => { socket.end(); process.exit(0); }); socket.on('error', () => process.exit(1));"
 
 USER nodejs
 
-EXPOSE 8080
+EXPOSE 8081
 
 CMD ["node", "standalone.js"]

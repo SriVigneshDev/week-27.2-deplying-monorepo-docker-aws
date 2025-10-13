@@ -1,15 +1,15 @@
 name: Deploy Backend
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'apps/backend/**'
-      - 'packages/**'
-      - 'docker/Dockerfile.backend'
-      - 'pnpm-lock.yaml'
-      - 'package.json'
-      - 'turbo.json'
-      - '.github/workflows/cd_backend.yml'
+      - "apps/backend/**"
+      - "packages/**"
+      - "docker/Dockerfile.backend"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "turbo.json"
+      - ".github/workflows/cd_backend.yml"
 
 jobs:
   build:
@@ -31,3 +31,16 @@ jobs:
           file: ./docker/Dockerfile.backend
           push: true
           tags: srivigneshdev2333/backend-app-week-27:${{ github.sha }}
+
+      # ADD THIS DEPLOY STEP
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker pull srivigneshdev2333/backend-app-week-27:${{ github.sha }}
+            docker stop backend || true
+            docker rm backend || true
+            docker run -d --name backend -p 8080:8080 --restart always srivigneshdev2333/backend-app-week-27:${{ github.sha }}

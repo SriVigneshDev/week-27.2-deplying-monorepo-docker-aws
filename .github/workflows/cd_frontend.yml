@@ -1,15 +1,15 @@
 name: Deploy Frontend
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'apps/web/**'
-      - 'packages/**'
-      - 'docker/Dockerfile.frontend'
-      - 'pnpm-lock.yaml'
-      - 'package.json'
-      - 'turbo.json'
-      - '.github/workflows/cd_frontend.yml'
+      - "apps/web/**"
+      - "packages/**"
+      - "docker/Dockerfile.frontend"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "turbo.json"
+      - ".github/workflows/cd_frontend.yml"
 
 jobs:
   build:
@@ -23,7 +23,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
 
       - name: Build & Push Docker Image
         uses: docker/build-push-action@v4
@@ -34,3 +33,16 @@ jobs:
             DATABASE_URL=${{ secrets.DATABASE_URL }}
           push: true
           tags: srivigneshdev2333/frontend-app-week-27:${{ github.sha }}
+
+      # ADD THIS DEPLOY STEP
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker pull srivigneshdev2333/frontend-app-week-27:${{ github.sha }}
+            docker stop frontend || true
+            docker rm frontend || true
+            docker run -d --name frontend -p 3000:3000 --restart always srivigneshdev2333/frontend-app-week-27:${{ github.sha }}
