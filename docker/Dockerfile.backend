@@ -40,7 +40,7 @@ WORKDIR /app
 
 # Copy ONLY the bundled file (this is why it's still 15-20MB!)
 COPY --from=builder --chown=nodejs:nodejs /app/apps/backend/standalone.js ./
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma ./node_modules/.prisma
 
 ENV NODE_ENV=production \
     PORT=8080 \
