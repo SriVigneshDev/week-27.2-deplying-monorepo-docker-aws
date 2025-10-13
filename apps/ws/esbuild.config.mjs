@@ -1,13 +1,18 @@
 import esbuild from 'esbuild';
 
 await esbuild.build({
-  entryPoints: ['./dist/index.js'],
+  entryPoints: ['dist/index.js'],
   bundle: true,
   platform: 'node',
   target: 'node22',
   outfile: 'standalone.js',
   minify: true,
-  external: ['@prisma/client', '.prisma/client'],  // Don't bundle Prisma
+  treeShaking: true,
+  external: ['*.node'],
+  drop: ['console', 'debugger'],
+  keepNames: false,
+  legalComments: 'none',
+  define: {
+    'process.env.NODE_ENV': '"production"'
+  }
 });
-
-console.log('✅ Bundle complete');

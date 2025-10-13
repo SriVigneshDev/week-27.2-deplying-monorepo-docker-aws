@@ -23,41 +23,34 @@ COPY apps/ws ./apps/ws
 # Generate database client
 RUN pnpm run generate:db
 
-# Build and bundle
+# Build and bundle (now includes esbuild via build:prod script!)
 RUN --mount=type=cache,target=.turbo \
     pnpm --filter=ws run build:prod
-
-# =========================================================================
-# ✨ NEW: Create a clean, deployable output with no symlinks
-# =========================================================================
-RUN pnpm --filter ws deploy --prod /app/deploy
-# Copy the built standalone file into the deploy directory
-RUN cp /app/apps/ws/standalone.js /app/deploy/
-
+    # This runs: tsc -b && node esbuild.config.mjs
 
 # 🚀 Production Stage - Alpine Minimal (~15-20MB total)
 FROM alpine:3.20
 
-# Install only Node.js runtime and create a non-root user
-RUN apk add --no-cache nodejs openssl && \
+# Install only Node.js runtime
+RUN apk add --no-cache nodejs && \
     addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
 WORKDIR /app
 
-# =========================================================================
-# ✨ UPDATED: Copy from the clean /deploy directory
-# This is now much simpler and more reliable.
-# =========================================================================
-COPY --from=builder --chown=nodejs:nodejs /app/deploy .
+# Copy ONLY the bundled file (this is why it's still 15-20MB!)
+COPY --from=builder --chown=nodejs:nodejs /app/apps/ws/standalone.js ./
 
 ENV NODE_ENV=production \
-    PORT=8081 \
+    PORT=8080 \
     NODE_OPTIONS="--max-old-space-size=256"
+
+# Health check for WebSocket
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node -e "const net = require('net'); const socket = net.connect(8080, 'localhost'); socket.on('connect', () => { socket.end(); process.exit(0); }); socket.on('error', () => process.exit(1));"
 
 USER nodejs
 
-EXPOSE 8081
+EXPOSE 8080
 
-# The CMD needs to be an array for proper signal handling
 CMD ["node", "standalone.js"]
