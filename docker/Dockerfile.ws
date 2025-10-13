@@ -40,17 +40,15 @@ WORKDIR /app
 
 # Copy ONLY the bundled file (this is why it's still 15-20MB!)
 COPY --from=builder --chown=nodejs:nodejs /app/apps/ws/standalone.js ./
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node ./
 
 ENV NODE_ENV=production \
-    PORT=8080 \
-    NODE_OPTIONS="--max-old-space-size=256"
-
-# Health check for WebSocket
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "const net = require('net'); const socket = net.connect(8080, 'localhost'); socket.on('connect', () => { socket.end(); process.exit(0); }); socket.on('error', () => process.exit(1));"
+    PORT=8081 \
+    NODE_OPTIONS="--max-old-space-size=256" \
+    PRISMA_QUERY_ENGINE_LIBRARY="/app/libquery_engine-linux-musl-openssl-3.0.x.so.node"
 
 USER nodejs
 
-EXPOSE 8080
+EXPOSE 8081
 
 CMD ["node", "standalone.js"]
