@@ -2,11 +2,9 @@ import esbuild from 'esbuild';
 import { copyFileSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Build
 await esbuild.build({
   entryPoints: ['dist/index.js'],
   bundle: true,
@@ -15,7 +13,7 @@ await esbuild.build({
   outfile: 'standalone.js',
   minify: true,
   treeShaking: true,
-  external: ['@prisma/client', '.prisma/client'],
+  external: ['.prisma/client'], // Only external the .prisma/client, NOT @prisma/client
   drop: ['console', 'debugger'],
   keepNames: false,
   legalComments: 'none',
@@ -24,12 +22,8 @@ await esbuild.build({
   }
 });
 
-// Find Prisma using pnpm
-const prismaClientPkg = execSync('pnpm list @prisma/client --json', { encoding: 'utf8' });
-const parsed = JSON.parse(prismaClientPkg);
-const prismaVersion = parsed[0]?.dependencies?.['@prisma/client']?.version || '6.17.1';
-
-const prismaPath = join(__dirname, '..', '..', 'node_modules', '.pnpm', `@prisma+client@${prismaVersion}_prisma@${prismaVersion}_typescript@5.9.2__typescript@5.9.2`, 'node_modules', '.prisma', 'client');
+// Copy Prisma binaries
+const prismaPath = '/app/node_modules/.pnpm/@prisma+client@6.17.1_prisma@6.17.1_typescript@5.9.2__typescript@5.9.2/node_modules/.prisma/client';
 
 if (existsSync(prismaPath)) {
   readdirSync(prismaPath)
@@ -39,6 +33,6 @@ if (existsSync(prismaPath)) {
       console.log(`✅ Copied ${file}`);
     });
 } else {
-  console.error('❌ Prisma not found at:', prismaPath);
+  console.error('❌ Prisma not found');
   process.exit(1);
 }
