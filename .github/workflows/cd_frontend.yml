@@ -45,4 +45,8 @@ jobs:
             docker pull srivigneshdev2333/frontend-app-week-27:${{ github.sha }}
             docker stop frontend || true
             docker rm frontend || true
-            docker run -d --name frontend -p 3000:3000  srivigneshdev2333/frontend-app-week-27:${{ github.sha }}
+             docker run -d --name frontend \
+              -p 8080:8080 \
+            -e "DATABASE_URL=${{ secrets.DATABASE_URL }}" \
+            --restart always \
+            srivigneshdev2333/frontend-app-week-27:${{ github.sha }}
