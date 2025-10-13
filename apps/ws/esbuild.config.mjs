@@ -4,15 +4,16 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const distDir = join(__dirname, 'dist');
 
 console.log('🔨 Building standalone bundle...');
 
 await esbuild.build({
-  entryPoints: [join(__dirname, 'dist', 'index.js')],
+  entryPoints: [join(distDir, 'index.js')],
   bundle: true,
   platform: 'node',
   target: 'node22',
-  outfile: join(outDir, 'standalone.js'),
+  outfile: join(__dirname, 'standalone.js'),
   minify: true,
   treeShaking: true,
   sourcemap: false,
