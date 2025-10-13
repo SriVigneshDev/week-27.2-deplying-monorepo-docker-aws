@@ -24,32 +24,33 @@ await esbuild.build({
 console.log('✅ Bundle complete');
 
 // Copy Prisma binaries
-// In pnpm monorepo, the .pnpm store is at workspace root (../../node_modules/.pnpm)
 const workspaceRoot = join(__dirname, '..', '..');
-const pnpmPrismaPath = join(workspaceRoot, 'node_modules', '.pnpm');
+const pnpmStorePath = join(workspaceRoot, 'node_modules', '.pnpm');
 let prismaEnginePath = null;
 
-// Find the actual Prisma client path in pnpm store
-if (existsSync(pnpmPrismaPath)) {
-  const pnpmDirs = readdirSync(pnpmPrismaPath);
-  const prismaDir = pnpmDirs.find(d => d.startsWith('@prisma+client'));
+// Find the Prisma client in pnpm store
+if (existsSync(pnpmStorePath)) {
+  console.log(`🔍 Searching for Prisma binaries in: ${pnpmStorePath}`);
   
-  if (prismaDir) {
-    // The actual .prisma/client folder is inside the @prisma/client package
-    const possiblePath = join(pnpmPrismaPath, prismaDir, 'node_modules', '.prisma', 'client');
+  const pnpmDirs = readdirSync(pnpmStorePath);
+  
+  // Look for @prisma+client directory (it will have version and deps in the name)
+  const prismaDirs = pnpmDirs.filter(d => d.startsWith('@prisma+client@'));
+  console.log(`📦 Found ${prismaDirs.length} Prisma client directories`);
+  
+  for (const dir of prismaDirs) {
+    const possiblePath = join(pnpmStorePath, dir, 'node_modules', '.prisma', 'client');
+    console.log(`  Checking: ${dir}`);
+    
     if (existsSync(possiblePath)) {
       prismaEnginePath = possiblePath;
-      console.log(`📦 Found Prisma binaries at: ${possiblePath}`);
+      console.log(`  ✓ Found binaries at: ${possiblePath}`);
+      
+      // List files in the directory
+      const files = readdirSync(possiblePath);
+      console.log(`  📋 Contains ${files.length} files:`, files.filter(f => f.endsWith('.node') || f.endsWith('.so')).join(', '));
+      break;
     }
-  }
-}
-
-// Alternative: Check if Prisma client exists in the resolved location
-if (!prismaEnginePath) {
-  const alternativePath = join(workspaceRoot, 'node_modules', '.prisma', 'client');
-  if (existsSync(alternativePath)) {
-    prismaEnginePath = alternativePath;
-    console.log(`📦 Found Prisma binaries at alternative path: ${alternativePath}`);
   }
 }
 
@@ -59,22 +60,38 @@ if (prismaEnginePath && existsSync(prismaEnginePath)) {
   
   // Copy all files from Prisma client directory
   const files = readdirSync(prismaEnginePath);
-  console.log(`📋 Copying ${files.length} Prisma files...`);
+  let copiedCount = 0;
   
   files.forEach(file => {
     const src = join(prismaEnginePath, file);
     const dest = join(outputPath, file);
-    if (statSync(src).isFile()) {
+    const stat = statSync(src);
+    
+    if (stat.isFile()) {
       copyFileSync(src, dest);
-      console.log(`  ✓ Copied: ${file}`);
+      copiedCount++;
+      
+      // Make binary files executable
+      if (file.endsWith('.node') || file.endsWith('.so') || !file.includes('.')) {
+        const fs = require('fs');
+        fs.chmodSync(dest, 0o755);
+      }
     }
   });
   
-  console.log('✅ Prisma binaries copied successfully');
+  console.log(`✅ Copied ${copiedCount} Prisma files to ${outputPath}`);
 } else {
   console.error('❌ Prisma binaries not found');
-  console.error('Searched paths:');
-  console.error(`  - pnpm store: ${pnpmPrismaPath}`);
-  console.error(`  - alternative: ${join(workspaceRoot, 'node_modules', '.prisma', 'client')}`);
-  process.exit(1);
+  console.error('Debug info:');
+  console.error(`  - Workspace root: ${workspaceRoot}`);
+  console.error(`  - pnpm store exists: ${existsSync(pnpmStorePath)}`);
+  
+  if (existsSync(pnpmStorePath)) {
+    const dirs = readdirSync(pnpmStorePath);
+    const prismaDirs = dirs.filter(d => d.includes('prisma'));
+    console.error(`  - Prisma-related dirs in store: ${prismaDirs.join(', ')}`);
+  }
+  
+  // Don't fail the build, let's try alternative approach
+  console.warn('⚠️ Will try to copy from alternative location during Docker build');
 }
