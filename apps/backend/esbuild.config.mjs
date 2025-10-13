@@ -1,10 +1,8 @@
 import esbuild from 'esbuild';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const outDir = join(__dirname, '..');
 
 console.log('🔨 Building standalone bundle...');
 
