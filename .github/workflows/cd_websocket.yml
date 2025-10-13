@@ -43,4 +43,8 @@ jobs:
             docker pull srivigneshdev2333/ws-app-week-27:${{ github.sha }}
             docker stop websocket || true
             docker rm websocket || true
-            docker run -d --name websocket -p 8081:8081  srivigneshdev2333/ws-app-week-27:${{ github.sha }}
+                    docker run -d --name websocket \
+            -p 8081:8081 \
+            -e "DATABASE_URL=${{ secrets.DATABASE_URL }}" \
+            --restart always \
+            srivigneshdev2333/ws-app-week-27:${{ github.sha }}
