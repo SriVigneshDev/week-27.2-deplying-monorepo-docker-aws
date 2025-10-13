@@ -32,7 +32,7 @@ RUN --mount=type=cache,target=.turbo \
 FROM alpine:3.20
 
 # Install only Node.js runtime
-RUN apk add --no-cache nodejs && \
+RUN apk add --no-cache nodejs openssl && \
     addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
@@ -44,6 +44,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/apps/ws/standalone.js ./
 ENV NODE_ENV=production \
     PORT=8080 \
     NODE_OPTIONS="--max-old-space-size=256"
+
 
 
 USER nodejs
