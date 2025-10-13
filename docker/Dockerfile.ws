@@ -40,8 +40,8 @@ WORKDIR /app
 
 # Copy ONLY the bundled file and Prisma binaries
 COPY --from=builder --chown=nodejs:nodejs /app/apps/ws/standalone.js ./
-# Fix: Copy from ws app, not backend app
-COPY --from=builder --chown=nodejs:nodejs /app/apps/ws/.prisma/client ./.prisma/client
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 ENV NODE_ENV=production \
     PORT=8081 \
